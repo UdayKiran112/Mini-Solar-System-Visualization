@@ -12,13 +12,14 @@ target_include_directories(glad PUBLIC external/glad/include)
 
 add_subdirectory(external/glfw)
 
+find_package(OpenGL REQUIRED)
+find_package(glm REQUIRED)
+
 file(GLOB SOURCES "src/*.cpp" "src/stb_image.cpp")
 
 add_executable(solar_system ${SOURCES})
 
-target_include_directories(solar_system PRIVATE include external/glad/include external/glfw/include)
-
-find_package(OpenGL REQUIRED)
+target_include_directories(solar_system PRIVATE include external/glad/include external/glfw/include ${GLM_INCLUDE_DIRS})
 
 target_link_libraries(solar_system PRIVATE glad glfw OpenGL::GL)
 
