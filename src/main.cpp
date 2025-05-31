@@ -112,7 +112,7 @@ int main()
         {0.08f, 1.30f, 1.20f, 0.25f, 2.0f, loadTexture("textures/2k_neptune.jpg"), {}},
     };
 
-    GLuint sunTexture = loadTexture("../textures/2k_sun.jpg");
+    GLuint sunTexture = loadTexture("textures/2k_sun.jpg");
 
     while (!glfwWindowShouldClose(window))
     {
