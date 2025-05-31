@@ -4,151 +4,141 @@
 #include <vector>
 #include <cmath>
 #include "shader.h"
+#include "texture.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-// stb_easy_font.h must be included for drawText if you want labels (not included here)
-
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_HEIGHT = 720;
 
 std::vector<float> generateCircleVertices(float radius, int segments)
 {
     std::vector<float> vertices;
-    vertices.push_back(0.0f); // center point
     vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+    vertices.push_back(0.5f);
+    vertices.push_back(0.5f);
     for (int i = 0; i <= segments; ++i)
     {
         float angle = 2.0f * M_PI * i / segments;
-        vertices.push_back(radius * cos(angle));
-        vertices.push_back(radius * sin(angle));
+        float x = radius * cos(angle);
+        float y = radius * sin(angle);
+        vertices.push_back(x);
+        vertices.push_back(y);
+        vertices.push_back(0.5f + 0.5f * cos(angle));
+        vertices.push_back(0.5f + 0.5f * sin(angle));
     }
     return vertices;
 }
 
+struct Planet
+{
+    float radius;
+    float orbitA, orbitB;
+    float orbitSpeed;
+    float rotationSpeed;
+    GLuint texture;
+    glm::vec3 color;
+};
+
 int main()
 {
-    // Initialize GLFW
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Mini Solar System", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Realistic Solar System", NULL, NULL);
     if (!window)
     {
-        std::cerr << "Failed to create GLFW window\n";
+        std::cerr << "GLFW window creation failed!\n";
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cerr << "Failed to initialize GLAD\n";
-        return -1;
-    }
-
+    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-    glClearColor(0.0f, 0.0f, 0.1f, 1.0f);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Load shaders
-    Shader sunShader("shaders/sun.vert", "shaders/sun.frag");
-    Shader planetShader("shaders/planet.vert", "shaders/planet.frag");
+    Shader textureShader("shaders/planet.vert", "shaders/planet.frag");
 
-    // Sun geometry
-    auto sunVertices = generateCircleVertices(0.2f, 100);
-    unsigned int sunVAO, sunVBO;
-    glGenVertexArrays(1, &sunVAO);
-    glGenBuffers(1, &sunVBO);
-
-    glBindVertexArray(sunVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, sunVBO);
-    glBufferData(GL_ARRAY_BUFFER, sunVertices.size() * sizeof(float), sunVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+    auto circleVertices = generateCircleVertices(1.0f, 100);
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, circleVertices.size() * sizeof(float), &circleVertices[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
-    // Planet geometry
-    auto planetVertices = generateCircleVertices(0.05f, 50);
-    unsigned int planetVAO, planetVBO;
-    glGenVertexArrays(1, &planetVAO);
-    glGenBuffers(1, &planetVBO);
+    std::vector<Planet> planets = {
+        {0.05f, 0.25f, 0.20f, 1.60f, 4.0f, loadTexture("../textures/2k_mercury.jpg"), {}},
+        {0.06f, 0.35f, 0.30f, 1.20f, 3.8f, loadTexture("../textures/2k_venus_surface.jpg"), {}},
+        {0.07f, 0.45f, 0.40f, 1.00f, 3.0f, loadTexture("../textures/2k_earth_daymap.jpg"), {}},
+        {0.025f, 0.10f, 0.07f, 5.0f, 3.0f, loadTexture("../textures/moon.jpg"), {}}, // Moon (draw after Earth)
+        {0.06f, 0.60f, 0.50f, 0.80f, 2.8f, loadTexture("../textures/2k_mars.jpg"), {}},
+        {0.12f, 0.80f, 0.70f, 0.60f, 2.6f, loadTexture("../textures/2k_jupiter.jpg"), {}},
+        {0.10f, 1.00f, 0.90f, 0.45f, 2.4f, loadTexture("../textures/2k_saturn.jpg"), {}},
+        {0.09f, 1.15f, 1.05f, 0.35f, 2.2f, loadTexture("../textures/2k_uranus.jpg"), {}},
+        {0.08f, 1.30f, 1.20f, 0.25f, 2.0f, loadTexture("../textures/2k_neptune.jpg"), {}},
+    };
 
-    glBindVertexArray(planetVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, planetVBO);
-    glBufferData(GL_ARRAY_BUFFER, planetVertices.size() * sizeof(float), planetVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
+    GLuint sunTexture = loadTexture("../textures/2k_sun.jpg");
 
-    // Moon geometry
-    auto moonVertices = generateCircleVertices(0.02f, 30);
-    unsigned int moonVAO, moonVBO;
-    glGenVertexArrays(1, &moonVAO);
-    glGenBuffers(1, &moonVBO);
-
-    glBindVertexArray(moonVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, moonVBO);
-    glBufferData(GL_ARRAY_BUFFER, moonVertices.size() * sizeof(float), moonVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    // Main loop
     while (!glfwWindowShouldClose(window))
     {
+        glClearColor(0.02f, 0.02f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         float time = glfwGetTime();
-
         float aspect = (float)SCR_WIDTH / (float)SCR_HEIGHT;
         glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
+        textureShader.use();
+        textureShader.setMat4("projection", &projection[0][0]);
 
         // Draw Sun
-        sunShader.use();
-        sunShader.setMat4("projection", &projection[0][0]);
-        glm::mat4 sunModel = glm::mat4(1.0f);
-        sunShader.setMat4("model", &sunModel[0][0]);
-        glBindVertexArray(sunVAO);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, sunVertices.size() / 2);
+        glm::mat4 sunModel = glm::scale(glm::mat4(1.0f), glm::vec3(0.15f));
+        textureShader.setMat4("model", &sunModel[0][0]);
+        glBindTexture(GL_TEXTURE_2D, sunTexture);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, circleVertices.size() / 4);
 
-        // Draw Earth (planet)
-        planetShader.use();
-        planetShader.setVec3("color", glm::vec3(0.1f, 0.6f, 1.0f));
-        planetShader.setMat4("projection", &projection[0][0]);
-
-        float planetOrbitRadius = 0.6f;
-        float planetAngle = time;
-        glm::vec3 planetPos(cos(planetAngle) * planetOrbitRadius, sin(planetAngle) * planetOrbitRadius, 0.0f);
-
-        glm::mat4 planetModel = glm::translate(glm::mat4(1.0f), planetPos);
-        planetModel = glm::rotate(planetModel, time * 2.0f, glm::vec3(0.0f, 0.0f, 1.0f));
-        planetShader.setMat4("model", &planetModel[0][0]);
-
-        glBindVertexArray(planetVAO);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, planetVertices.size() / 2);
-
-        // Draw Moon
-        planetShader.setVec3("color", glm::vec3(0.8f, 0.8f, 0.8f));
-        float moonOrbitRadius = 0.15f;
-        float moonAngle = time * 4.0f;
-        glm::vec3 moonOffset(cos(moonAngle) * moonOrbitRadius, sin(moonAngle) * moonOrbitRadius, 0.0f);
-
-        glm::mat4 moonModel = glm::translate(glm::mat4(1.0f), planetPos + moonOffset);
-        moonModel = glm::rotate(moonModel, time * 3.0f, glm::vec3(0.0f, 0.0f, 1.0f));
-        planetShader.setMat4("model", &moonModel[0][0]);
-
-        glBindVertexArray(moonVAO);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, moonVertices.size() / 2);
+        // Draw Planets
+        for (int i = 0; i < planets.size(); ++i)
+        {
+            Planet &p = planets[i];
+            if (i == 3)
+            { // Moon (draw relative to Earth)
+                Planet &earth = planets[2];
+                float earthX = earth.orbitA * cos(time * earth.orbitSpeed);
+                float earthY = earth.orbitB * sin(time * earth.orbitSpeed);
+                float moonX = p.orbitA * cos(time * p.orbitSpeed);
+                float moonY = p.orbitB * sin(time * p.orbitSpeed);
+                glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(earthX + moonX, earthY + moonY, 0.0f));
+                model = glm::rotate(model, time * p.rotationSpeed, glm::vec3(0, 0, 1));
+                model = glm::scale(model, glm::vec3(p.radius));
+                textureShader.setMat4("model", &model[0][0]);
+                glBindTexture(GL_TEXTURE_2D, p.texture);
+            }
+            else
+            {
+                float x = p.orbitA * cos(time * p.orbitSpeed);
+                float y = p.orbitB * sin(time * p.orbitSpeed);
+                glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f));
+                model = glm::rotate(model, time * p.rotationSpeed, glm::vec3(0, 0, 1));
+                model = glm::scale(model, glm::vec3(p.radius));
+                textureShader.setMat4("model", &model[0][0]);
+                glBindTexture(GL_TEXTURE_2D, p.texture);
+            }
+            glBindVertexArray(VAO);
+            glDrawArrays(GL_TRIANGLE_FAN, 0, circleVertices.size() / 4);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    // Cleanup
-    glDeleteVertexArrays(1, &sunVAO);
-    glDeleteBuffers(1, &sunVBO);
-    glDeleteVertexArrays(1, &planetVAO);
-    glDeleteBuffers(1, &planetVBO);
-    glDeleteVertexArrays(1, &moonVAO);
-    glDeleteBuffers(1, &moonVBO);
 
     glfwDestroyWindow(window);
     glfwTerminate();
