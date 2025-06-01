@@ -76,23 +76,26 @@ int main()
         return -1;
     }
 
+    glEnable(GL_DEPTH_TEST); // Enable depth test for 3D correct rendering
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     Shader textureShader("shaders/planet.vert", "shaders/planet.frag");
     Shader orbitShader("shaders/orbit.vert", "shaders/orbit.frag");
 
+    // Create circle vertex data with positions and texture coords (for planets)
     std::vector<float> circleVertices = {
-        0.0f, 0.0f, 0.5f, 0.5f};
+        0.0f, 0.0f, 0.5f, 0.5f // center vertex with texture coord center
+    };
 
     const int circleSegments = 100;
     for (int i = 0; i <= circleSegments; ++i)
     {
         float angle = 2.0f * M_PI * i / circleSegments;
-        circleVertices.push_back(cos(angle));
-        circleVertices.push_back(sin(angle));
-        circleVertices.push_back(0.5f + 0.5f * cos(angle));
-        circleVertices.push_back(0.5f + 0.5f * sin(angle));
+        circleVertices.push_back(cos(angle));               // x
+        circleVertices.push_back(sin(angle));               // y
+        circleVertices.push_back(0.5f + 0.5f * cos(angle)); // tex x
+        circleVertices.push_back(0.5f + 0.5f * sin(angle)); // tex y
     }
 
     GLuint VAO_planet, VBO_planet;
@@ -102,9 +105,10 @@ int main()
     glBindVertexArray(VAO_planet);
     glBindBuffer(GL_ARRAY_BUFFER, VBO_planet);
     glBufferData(GL_ARRAY_BUFFER, circleVertices.size() * sizeof(float), circleVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0); // positions
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float))); // tex coords
     glEnableVertexAttribArray(1);
 
     std::vector<float> orbitVertices = generateCircleVertices(1.0f, 1.0f, circleSegments);
@@ -147,17 +151,24 @@ int main()
         }
 
         glClearColor(0.02f, 0.02f, 0.08f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear depth buffer too
 
         float time = (float)glfwGetTime();
         float aspect = (float)SCR_WIDTH / SCR_HEIGHT;
-        glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f);
 
-        // Draw Orbits
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 3.0f), // Camera position
+            glm::vec3(0.0f, 0.0f, 0.0f), // Look at origin
+            glm::vec3(0.0f, 1.0f, 0.0f)  // Up vector
+        );
+
+        // Draw Orbits (using orbitShader)
         orbitShader.use();
         orbitShader.setMat4("projection", glm::value_ptr(projection));
-        glBindVertexArray(VAO_orbit);
+        orbitShader.setMat4("view", glm::value_ptr(view));
 
+        glBindVertexArray(VAO_orbit);
         for (auto &p : planets)
         {
             glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(p.orbitA, p.orbitB, 1.0f));
@@ -169,6 +180,8 @@ int main()
         // Draw Sun
         textureShader.use();
         textureShader.setMat4("projection", glm::value_ptr(projection));
+        textureShader.setMat4("view", glm::value_ptr(view));
+
         glm::mat4 sunModel = glm::scale(glm::mat4(1.0f), glm::vec3(0.15f));
         textureShader.setMat4("model", glm::value_ptr(sunModel));
         glBindTexture(GL_TEXTURE_2D, sunTexture);
@@ -186,15 +199,17 @@ int main()
         earthModel = glm::rotate(earthModel, time * planets[2].rotationSpeed, glm::vec3(0, 0, 1));
         earthModel = glm::scale(earthModel, glm::vec3(planets[2].radius));
         textureShader.setMat4("model", glm::value_ptr(earthModel));
+
         glBindTexture(GL_TEXTURE_2D, planets[2].texture);
         glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(circleVertices.size() / 4));
 
-        // Moon Orbit around Earth (light gray)
+        // Moon Orbit around Earth
         orbitShader.use();
         glm::mat4 moonOrbitModel = glm::translate(glm::mat4(1.0f), earthPos);
         moonOrbitModel = glm::scale(moonOrbitModel, glm::vec3(planets[3].orbitA, planets[3].orbitB, 1.0f));
         orbitShader.setMat4("model", glm::value_ptr(moonOrbitModel));
         orbitShader.setVec3("orbitColor", glm::vec3(0.8f));
+        orbitShader.setMat4("view", glm::value_ptr(view));
 
         glBindVertexArray(VAO_orbit);
         glDrawArrays(GL_LINE_LOOP, 0, circleSegments + 1);
@@ -211,14 +226,19 @@ int main()
         moonModel = glm::rotate(moonModel, time * planets[3].rotationSpeed, glm::vec3(0, 0, 1));
         moonModel = glm::scale(moonModel, glm::vec3(planets[3].radius));
         textureShader.use();
+        textureShader.setMat4("projection", glm::value_ptr(projection));
+        textureShader.setMat4("view", glm::value_ptr(view));
         textureShader.setMat4("model", glm::value_ptr(moonModel));
+
         glBindTexture(GL_TEXTURE_2D, planets[3].texture);
+        glBindVertexArray(VAO_planet);
         glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(circleVertices.size() / 4));
 
+        // Draw other planets
         for (size_t i = 0; i < planets.size(); ++i)
         {
             if (i == 2 || i == 3)
-                continue;
+                continue; // Already drawn Earth and Moon
 
             float angle = time * planets[i].orbitSpeed;
             glm::vec3 pos = {
@@ -229,8 +249,14 @@ int main()
             glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
             model = glm::rotate(model, time * planets[i].rotationSpeed, glm::vec3(0, 0, 1));
             model = glm::scale(model, glm::vec3(planets[i].radius));
+
+            textureShader.use();
+            textureShader.setMat4("projection", glm::value_ptr(projection));
+            textureShader.setMat4("view", glm::value_ptr(view));
             textureShader.setMat4("model", glm::value_ptr(model));
+
             glBindTexture(GL_TEXTURE_2D, planets[i].texture);
+            glBindVertexArray(VAO_planet);
             glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(circleVertices.size() / 4));
         }
 
@@ -238,10 +264,12 @@ int main()
         glfwPollEvents();
     }
 
+    // Cleanup
     glDeleteVertexArrays(1, &VAO_planet);
     glDeleteBuffers(1, &VBO_planet);
     glDeleteVertexArrays(1, &VAO_orbit);
     glDeleteBuffers(1, &VBO_orbit);
+
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
