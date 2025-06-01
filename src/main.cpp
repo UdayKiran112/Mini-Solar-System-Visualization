@@ -15,6 +15,65 @@ const unsigned int SCR_HEIGHT_DEFAULT = 720;
 unsigned int SCR_WIDTH = SCR_WIDTH_DEFAULT;
 unsigned int SCR_HEIGHT = SCR_HEIGHT_DEFAULT;
 
+glm::vec3 cameraPos(0.0f, 0.0f, 3.0f);
+float yaw = -90.0f; // Horizontal angle, init looking at -Z
+float pitch = 0.0f; // Vertical angle
+float lastX = SCR_WIDTH / 2.0f;
+float lastY = SCR_HEIGHT / 2.0f;
+bool firstMouse = true;
+float fov = 45.0f;
+
+bool leftMousePressed = false;
+double lastMouseX, lastMouseY;
+
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        if (action == GLFW_PRESS)
+        {
+            leftMousePressed = true;
+            glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            leftMousePressed = false;
+        }
+    }
+}
+
+void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (leftMousePressed)
+    {
+        float xoffset = float(xpos - lastMouseX);
+        float yoffset = float(lastMouseY - ypos); // reversed since y-coords go from bottom to top
+        lastMouseX = xpos;
+        lastMouseY = ypos;
+
+        float sensitivity = 0.1f;
+        xoffset *= sensitivity;
+        yoffset *= sensitivity;
+
+        yaw += xoffset;
+        pitch += yoffset;
+
+        if (pitch > 89.0f)
+            pitch = 89.0f;
+        if (pitch < -89.0f)
+            pitch = -89.0f;
+    }
+}
+
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
+{
+    fov -= (float)yoffset;
+    if (fov < 15.0f)
+        fov = 15.0f;
+    if (fov > 90.0f)
+        fov = 90.0f;
+}
+
 std::vector<float> generateCircleVertices(float radiusX, float radiusY, int segments)
 {
     std::vector<float> vertices;
@@ -30,6 +89,114 @@ std::vector<float> generateCircleVertices(float radiusX, float radiusY, int segm
 std::vector<float> generateCircleVertices(float radius, int segments)
 {
     return generateCircleVertices(radius, radius, segments);
+}
+
+struct SphereMesh
+{
+    std::vector<float> vertices; // position (3), normal (3), tex coords (2) = 8 floats per vertex
+    std::vector<unsigned int> indices;
+    unsigned int VAO, VBO, EBO;
+};
+
+SphereMesh generateSphere(float radius, int sectorCount, int stackCount)
+{
+    SphereMesh sphere;
+
+    float x, y, z, xy;                           // vertex position
+    float nx, ny, nz, lengthInv = 1.0f / radius; // normals
+    float s, t;                                  // tex coords
+
+    float sectorStep = 2 * M_PI / sectorCount;
+    float stackStep = M_PI / stackCount;
+    float sectorAngle, stackAngle;
+
+    for (int i = 0; i <= stackCount; ++i)
+    {
+        stackAngle = M_PI / 2 - i * stackStep; // from pi/2 to -pi/2
+        xy = radius * cosf(stackAngle);        // r * cos(u)
+        y = radius * sinf(stackAngle);         // r * sin(u)
+
+        for (int j = 0; j <= sectorCount; ++j)
+        {
+            sectorAngle = j * sectorStep; // from 0 to 2pi
+
+            x = xy * cosf(sectorAngle); // r * cos(u) * cos(v)
+            z = xy * sinf(sectorAngle); // r * cos(u) * sin(v)
+
+            // position
+            sphere.vertices.push_back(x);
+            sphere.vertices.push_back(y);
+            sphere.vertices.push_back(z);
+
+            // normalized normal vector
+            nx = x * lengthInv;
+            ny = y * lengthInv;
+            nz = z * lengthInv;
+            sphere.vertices.push_back(nx);
+            sphere.vertices.push_back(ny);
+            sphere.vertices.push_back(nz);
+
+            // texture coords
+            s = (float)j / sectorCount;
+            t = (float)i / stackCount;
+            sphere.vertices.push_back(s);
+            sphere.vertices.push_back(t);
+        }
+    }
+
+    // indices
+    unsigned int k1, k2;
+    for (int i = 0; i < stackCount; ++i)
+    {
+        k1 = i * (sectorCount + 1); // beginning of current stack
+        k2 = k1 + sectorCount + 1;  // beginning of next stack
+
+        for (int j = 0; j < sectorCount; ++j, ++k1, ++k2)
+        {
+            if (i != 0)
+            {
+                sphere.indices.push_back(k1);
+                sphere.indices.push_back(k2);
+                sphere.indices.push_back(k1 + 1);
+            }
+
+            if (i != (stackCount - 1))
+            {
+                sphere.indices.push_back(k1 + 1);
+                sphere.indices.push_back(k2);
+                sphere.indices.push_back(k2 + 1);
+            }
+        }
+    }
+
+    // Setup OpenGL buffers and arrays:
+    glGenVertexArrays(1, &sphere.VAO);
+    glGenBuffers(1, &sphere.VBO);
+    glGenBuffers(1, &sphere.EBO);
+
+    glBindVertexArray(sphere.VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, sphere.VBO);
+    glBufferData(GL_ARRAY_BUFFER, sphere.vertices.size() * sizeof(float), sphere.vertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphere.EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphere.indices.size() * sizeof(unsigned int), sphere.indices.data(), GL_STATIC_DRAW);
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    // normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // texcoords attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0);
+
+    return sphere;
 }
 
 struct Planet
@@ -59,6 +226,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwSwapInterval(1);
 
     GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Realistic Solar System", NULL, NULL);
     if (!window)
@@ -69,6 +237,9 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -156,12 +327,15 @@ int main()
         float time = (float)glfwGetTime();
         float aspect = (float)SCR_WIDTH / SCR_HEIGHT;
 
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-        glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 3.0f), // Camera position
-            glm::vec3(0.0f, 0.0f, 0.0f), // Look at origin
-            glm::vec3(0.0f, 1.0f, 0.0f)  // Up vector
-        );
+        glm::mat4 projection = glm::perspective(glm::radians(fov), aspect, 0.1f, 100.0f);
+
+        glm::vec3 front;
+        front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+        front.y = sin(glm::radians(pitch));
+        front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        front = glm::normalize(front);
+
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + front, glm::vec3(0, 1, 0));
 
         // Draw Orbits (using orbitShader)
         orbitShader.use();
@@ -181,6 +355,7 @@ int main()
         textureShader.use();
         textureShader.setMat4("projection", glm::value_ptr(projection));
         textureShader.setMat4("view", glm::value_ptr(view));
+        textureShader.setFloat("time", time);
 
         glm::mat4 sunModel = glm::scale(glm::mat4(1.0f), glm::vec3(0.15f));
         textureShader.setMat4("model", glm::value_ptr(sunModel));
