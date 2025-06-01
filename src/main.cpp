@@ -181,6 +181,7 @@ int main()
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_CULL_FACE);
 
     /* SHADERS */
     Shader SimpleShader("shaders/simpleVS.vs", "shaders/simpleFS.fs");
@@ -397,7 +398,12 @@ int main()
     camera.ProcessMouseMovement(xoff, yoff);
     camera.FreeCam = false;
     onFreeCam = true;
-    glm::mat4 view;
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, 30.0f), // Camera position
+        glm::vec3(0.0f, 0.0f, 0.0f),  // Target
+        glm::vec3(0.0f, 1.0f, 0.0f)   // Up
+    );
+
     glm::vec3 PlanetsPositions[9];
     while (!glfwWindowShouldClose(window))
     {
@@ -409,7 +415,7 @@ int main()
         /* ZOOM CONTROL */
         if (!camera.FreeCam)
         {
-            if (camera.Position.y < 200 && camera.Position.y > 200.0f)
+            if (camera.Position.y < 200 && camera.Position.y > 125.f)
                 camera.MovementSpeed = 300.0f;
             if (camera.Position.y < 125.f && camera.Position.y > 70.0f)
                 camera.MovementSpeed = 200.0f;
@@ -459,7 +465,7 @@ int main()
         glBindTexture(GL_TEXTURE_2D, t_sun);
 
         /* SUN */
-        glm::mat4 model_sun;
+        glm::mat4 model_sun = glm::mat4(1.0f);
         model_sun = glm::rotate(model_sun, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.f));
         model_sun = glm::rotate(model_sun, (GLfloat)glfwGetTime() * glm::radians(23.5f) * 0.25f, glm::vec3(0.0f, 0.0f, 1.f));
         model_sun = glm::translate(model_sun, point);
@@ -468,7 +474,7 @@ int main()
         /* SUN */
 
         /* MERCURY */
-        glm::mat4 model_mercury;
+        glm::mat4 model_mercury = glm::mat4(1.0f);
         double xx = sin(glfwGetTime() * PlanetSpeed) * 100.0f * 2.0f * 1.3f;
         double zz = cos(glfwGetTime() * PlanetSpeed) * 100.0f * 2.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -485,7 +491,7 @@ int main()
         /* MERCURY */
 
         /* VENUS */
-        glm::mat4 model_venus;
+        glm::mat4 model_venus = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.75f) * 100.0f * 3.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.75f) * 100.0f * 3.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -503,7 +509,7 @@ int main()
         /* VENUS */
 
         /* EARTH */
-        glm::mat4 model_earth;
+        glm::mat4 model_earth = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.55f) * 100.0f * 4.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.55f) * 100.0f * 4.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -524,7 +530,7 @@ int main()
         /* EARTH */
 
         /* MOON */
-        glm::mat4 model_moon;
+        glm::mat4 model_moon = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 67.55f) * 100.0f * 0.5f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 67.55f) * 100.0f * 0.5f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -541,7 +547,7 @@ int main()
         /* MOON */
 
         /* MARS */
-        glm::mat4 model_mars;
+        glm::mat4 model_mars = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.35f) * 100.0f * 5.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.35f) * 100.0f * 5.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -559,7 +565,7 @@ int main()
         /* MARS */
 
         /* JUPITER */
-        glm::mat4 model_jupiter;
+        glm::mat4 model_jupiter = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.2f) * 100.0f * 6.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.2f) * 100.0f * 6.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -577,7 +583,7 @@ int main()
         /* JUPITER */
 
         /* SATURN */
-        glm::mat4 model_saturn;
+        glm::mat4 model_saturn = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.15f) * 100.0f * 7.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.15f) * 100.0f * 7.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -596,7 +602,7 @@ int main()
         /* SATURN */
 
         /* URANUS */
-        glm::mat4 model_uranus;
+        glm::mat4 model_uranus = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.1f) * 100.0f * 8.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.1f) * 100.0f * 8.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
@@ -614,7 +620,7 @@ int main()
         /* URANUS */
 
         /* NEPTUNE */
-        glm::mat4 model_neptune;
+        glm::mat4 model_neptune = glm::mat4(1.0f);
         xx = sin(glfwGetTime() * PlanetSpeed * 0.08f) * 100.0f * 9.0f * 1.3f;
         zz = cos(glfwGetTime() * PlanetSpeed * 0.08f) * 100.0f * 9.0f * 1.3f;
         glActiveTexture(GL_TEXTURE0);
